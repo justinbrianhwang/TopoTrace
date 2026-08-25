@@ -43,6 +43,17 @@ def _finish(model):
     return model.cpu().eval()
 
 
+def noise_destroy(model, sigma: float = 0.1, seed: int = 0):
+    """Return a copy with per-tensor Gaussian parameter noise."""
+    torch.manual_seed(seed)
+    student = deepcopy(model)
+    with torch.no_grad():
+        for parameter in student.parameters():
+            if parameter.is_floating_point():
+                parameter.add_(torch.randn_like(parameter) * sigma * parameter.std())
+    return _finish(student)
+
+
 def _accuracy(model, X, y, idx, batch_size, device):
     correct = 0
     with torch.no_grad():
