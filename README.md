@@ -76,9 +76,9 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 pip install numpy scikit-learn matplotlib ripser persim gudhi
 ```
 
-Datasets load from the torchvision root configured as `DATA_ROOT` in
-`src/topotrace/mnist.py` (download=True, so a missing dataset is fetched
-there automatically). Point it at your local torchvision data directory.
+Datasets load from `data/` (torchvision layout, auto-download on first
+use). To reuse an existing torchvision data directory instead of a local
+copy, make `data/` a symlink/junction to it — it is gitignored either way.
 
 ## Reproduce
 

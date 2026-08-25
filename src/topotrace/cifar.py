@@ -3,11 +3,8 @@
 import numpy as np
 
 
-from topotrace.mnist import DATA_ROOT
-
-
 def load_cifar10(
-    root: str = DATA_ROOT,
+    root: str = "data",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load channel-normalized torchvision CIFAR-10 arrays."""
     from torchvision.datasets import CIFAR10
