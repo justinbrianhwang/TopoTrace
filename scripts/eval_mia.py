@@ -39,8 +39,10 @@ def main():
         forget_idx, _ = make_class_forget_split(y, 9)
     elif scenario == "random":
         forget_idx, _ = make_random_forget_split(y, .05, 0)
+    elif scenario in ("targeted", "matched"):
+        forget_idx = np.load(ROOT / "results" / "m4_splits.npz")[f"{scenario}_forget"]
     else:
-        parser.error("result directory name must end in '_random' or '_class'")
+        parser.error("unknown scenario suffix in result directory name")
 
     aucs = {}
     for checkpoint in sorted(models_dir.glob("*.pt")):
