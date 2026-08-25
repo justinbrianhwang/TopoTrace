@@ -20,7 +20,7 @@ from topotrace.topology import (chordal_distance_matrix, make_imager,
                                 persistence_diagrams, vectorize)
 from topotrace.unlearn import finetune, neggrad, scrub, ssd
 
-SEEDS = range(5)
+SEEDS = range(10)
 LAYER = "penultimate"
 
 
@@ -32,6 +32,10 @@ def main():
     X, y, X_test, y_test = load_mnist(str(ROOT / "data"))
     if scenario == "class":
         forget_idx, retain_idx = make_class_forget_split(y, cls=9)
+    elif scenario in ("targeted", "matched"):
+        splits = np.load(ROOT / "results" / "m3" / "splits.npz")
+        forget_idx = splits[f"{scenario}_forget"]
+        retain_idx = splits[f"{scenario}_retain"]
     else:
         forget_idx, retain_idx = make_random_forget_split(y, frac=0.05, seed=0)
     probe_idx = make_probe(X, forget_idx, retain_idx, seed=0)
@@ -64,14 +68,20 @@ def main():
             "test": float(np.mean([evaluate(m, X_test, y_test) for m in ms])),
         }
 
-    # Topology fingerprints on fixed probe
+    # Topology fingerprints on fixed probe; save embeddings for offline
+    # analysis (plan §17 — avoids retraining to try other layers/vectors)
     print("computing persistence ...", flush=True)
     probe = X[probe_idx]
     dgms = {name: [] for name in models}
+    emb_store = {}
     for name, ms in models.items():
-        for m in ms:
-            Z = get_embeddings(m, probe)[LAYER]
-            dgms[name].append(persistence_diagrams(chordal_distance_matrix(Z)))
+        for i, m in enumerate(ms):
+            E = get_embeddings(m, probe)
+            emb_store[f"{name}_{i}_penultimate"] = E["penultimate"]
+            emb_store[f"{name}_{i}_logits"] = E["logits"]
+            dgms[name].append(
+                persistence_diagrams(chordal_distance_matrix(E[LAYER])))
+    np.savez_compressed(out / "embeddings.npz", **emb_store)
 
     imager = make_imager([d[1] for ds in dgms.values() for d in ds])
     vecs = {n: [vectorize(d, imager) for d in ds] for n, ds in dgms.items()}

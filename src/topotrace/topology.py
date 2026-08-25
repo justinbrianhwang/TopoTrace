@@ -27,10 +27,12 @@ def persistence_diagrams(D: np.ndarray, maxdim: int = 1) -> list[np.ndarray]:
     return dgms
 
 
-def vectorize(dgms: list[np.ndarray], imager) -> np.ndarray:
-    """Return the flattened H1 persistence image on a shared grid."""
-    h1 = dgms[1]
-    image = np.zeros(imager.resolution) if h1.size == 0 else imager.transform(h1)
+def vectorize(dgms: list[np.ndarray], imager, dim: int = 1) -> np.ndarray:
+    """Return a flattened persistence image on a shared grid."""
+    dgm = dgms[dim]
+    if dim == 0:
+        dgm = dgm[dgm[:, 1] != dgm[:, 0]]
+    image = np.zeros(imager.resolution) if dgm.size == 0 else imager.transform(dgm)
     return np.asarray(image, dtype=np.float64).ravel()
 
 
