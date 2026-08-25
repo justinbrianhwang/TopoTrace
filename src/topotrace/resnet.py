@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torchvision.models import resnet18
+from torchvision.models import ResNet18_Weights, resnet18
 
 
 def _default_device():
@@ -59,6 +59,33 @@ def get_embeddings(
     }
 
 
+def get_all_embeddings(model, X, batch_size=256, device=None) -> dict:
+    """Return avg-pooled activations after every ResNet stage."""
+    device = device or _default_device()
+    original_device = next(model.parameters()).device
+    model.to(device).eval()
+    outputs = {name: [] for name in (
+        "stem", "layer1", "layer2", "layer3", "layer4",
+        "penultimate", "logits",
+    )}
+    with torch.no_grad():
+        for start in range(0, len(X), batch_size):
+            x = torch.as_tensor(X[start : start + batch_size], device=device)
+            net = model.net
+            x = net.relu(net.bn1(net.conv1(x)))
+            outputs["stem"].append(torch.flatten(net.avgpool(x), 1).cpu().numpy())
+            x = net.maxpool(x)
+            for name in ("layer1", "layer2", "layer3", "layer4"):
+                x = getattr(net, name)(x)
+                outputs[name].append(torch.flatten(net.avgpool(x), 1).cpu().numpy())
+            embedding = torch.flatten(net.avgpool(x), 1)
+            outputs["penultimate"].append(embedding.cpu().numpy())
+            outputs["logits"].append(net.fc(embedding).cpu().numpy())
+    model.to(original_device)
+    return {name: np.concatenate(values).astype(np.float32, copy=False)
+            for name, values in outputs.items()}
+
+
 def _augment(x, generator):
     padded = F.pad(x, (4, 4, 4, 4), mode="replicate")
     offsets = torch.randint(9, (len(x), 2), device=x.device, generator=generator)
@@ -80,11 +107,17 @@ def train_resnet(
     init_model=None,
     device=None,
     num_classes: int = 10,
+    pretrained: bool = False,
 ) -> ResNet18C:
     """Train ResNet-18 with SGD, CIFAR augmentation, cosine decay, and AMP."""
     if init_model is None:
         torch.manual_seed(seed)
         model = ResNet18C(num_classes=num_classes)
+        if pretrained:
+            state = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).state_dict()
+            for key in ("conv1.weight", "fc.weight", "fc.bias"):
+                del state[key]
+            model.net.load_state_dict(state, strict=False)
     else:
         model = deepcopy(init_model)
     device = torch.device(device or _default_device())
