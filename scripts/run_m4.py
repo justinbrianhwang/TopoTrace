@@ -5,6 +5,7 @@ Outputs: results/m4_<scenario>/ (metrics.json, embeddings.npz, probe_idx.npy)
 Analyze with: scripts/analyze_m2.py results/m4_<scenario>
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -28,7 +29,9 @@ LAYER = "penultimate"
 def main():
     scenario = sys.argv[1] if len(sys.argv) > 1 else "random"
     seeds = range(int(sys.argv[2]) if len(sys.argv) > 2 else 5)
-    out = ROOT / "results" / f"m4_{scenario}"
+    pretrained = os.environ.get("TOPOTRACE_PRETRAINED") == "1"
+    tag = "_pretrained" if pretrained else ""
+    out = ROOT / "results" / f"m4_{scenario}{tag}"
     out.mkdir(parents=True, exist_ok=True)
 
     X, y, X_test, y_test = load_cifar10()
@@ -51,11 +54,13 @@ def main():
                               "finetune", "neggrad", "scrub", "ssd")}
     for s in seeds:
         print(f"seed {s}: training original/retrain/retrain2 ...", flush=True)
-        orig = train_resnet(X, y, all_idx, seed=s)
+        orig = train_resnet(X, y, all_idx, seed=s, pretrained=pretrained)
         models["original"].append(orig)
         models["noop"].append(orig)
-        models["retrain"].append(train_resnet(X, y, retain_idx, seed=1000 + s))
-        models["retrain2"].append(train_resnet(X, y, retain_idx, seed=3000 + s))
+        models["retrain"].append(
+            train_resnet(X, y, retain_idx, seed=1000 + s, pretrained=pretrained))
+        models["retrain2"].append(
+            train_resnet(X, y, retain_idx, seed=3000 + s, pretrained=pretrained))
         print(f"seed {s}: unlearning ...", flush=True)
         models["finetune"].append(finetune(orig, X, y, forget_idx, retain_idx, seed=2000 + s))
         models["neggrad"].append(neggrad(orig, X, y, forget_idx, retain_idx, seed=2000 + s))
