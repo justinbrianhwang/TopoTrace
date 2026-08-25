@@ -38,8 +38,11 @@ def main():
         splits = np.load(ROOT / "results" / "m4_splits.npz")
         forget_idx = splits[f"{scenario}_forget"]
         retain_idx = splits[f"{scenario}_retain"]
+    elif scenario.startswith("random"):
+        frac = float(scenario[6:] or 5) / 100  # random / random1 / random10
+        forget_idx, retain_idx = make_random_forget_split(y, frac=frac, seed=0)
     else:
-        forget_idx, retain_idx = make_random_forget_split(y, frac=0.05, seed=0)
+        raise SystemExit(f"unknown scenario {scenario}")
     probe_idx = make_probe(X, forget_idx, retain_idx, seed=0)
     all_idx = np.arange(len(y))
     np.save(out / "probe_idx.npy", probe_idx)
