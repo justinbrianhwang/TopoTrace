@@ -34,6 +34,10 @@ def main():
     X, y, X_test, y_test = load_cifar10(str(ROOT / "data"))
     if scenario == "class":
         forget_idx, retain_idx = make_class_forget_split(y, cls=9)
+    elif scenario in ("targeted", "matched"):
+        splits = np.load(ROOT / "results" / "m4_splits.npz")
+        forget_idx = splits[f"{scenario}_forget"]
+        retain_idx = splits[f"{scenario}_retain"]
     else:
         forget_idx, retain_idx = make_random_forget_split(y, frac=0.05, seed=0)
     probe_idx = make_probe(X, forget_idx, retain_idx, seed=0)

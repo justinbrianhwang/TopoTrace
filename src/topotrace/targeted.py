@@ -26,14 +26,15 @@ def score_by_cycle_support(Z: np.ndarray, maxdim: int = 1) -> np.ndarray:
 
 
 def make_targeted_split(X, y, n_forget: int = 3000, pool_size: int = 2000,
-                        selector_seed: int = 9999, seed: int = 0
+                        selector_seed: int = 9999, seed: int = 0,
+                        train_fn=train_cnn, embed_fn=get_embeddings
                         ) -> tuple[np.ndarray, np.ndarray]:
     """Select samples nearest to persistent-cycle support samples."""
     rng = np.random.default_rng(seed)
-    selector = train_cnn(X, y, np.arange(len(y)), seed=selector_seed,
-                         epochs=3)
+    selector = train_fn(X, y, np.arange(len(y)), seed=selector_seed,
+                        epochs=3)
     pool = rng.choice(len(y), pool_size, replace=False)
-    Z = get_embeddings(selector, X)["penultimate"].astype(np.float64)
+    Z = embed_fn(selector, X)["penultimate"].astype(np.float64)
     support = pool[score_by_cycle_support(Z[pool]) > 0]
 
     unit = Z / (np.linalg.norm(Z, axis=1, keepdims=True) + 1e-12)
