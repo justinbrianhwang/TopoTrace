@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--device")
     args = parser.parse_args()
 
-    X, y, _, _ = load_cifar10(str(ROOT / "data"))
+    X, y, _, _ = load_cifar10()
     scenario = args.result_dir.name.rsplit("_", 1)[-1]
     if scenario == "random":
         forget_idx, _ = make_random_forget_split(y, .05, 0)

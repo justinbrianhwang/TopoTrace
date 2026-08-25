@@ -4,8 +4,11 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 
+DATA_ROOT = r"D:\pythondata\torch data"
+
+
 def load_mnist(
-    root: str = "data",
+    root: str = DATA_ROOT,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load normalized torchvision MNIST arrays."""
     from torchvision.datasets import MNIST

@@ -33,7 +33,7 @@ def main():
         from topotrace.cifar import load_cifar10 as load_data
         from topotrace.resnet import ResNet18C as Model
 
-    X, y, X_test, y_test = load_data(str(ROOT / "data"))
+    X, y, X_test, y_test = load_data()
     scenario = args.result_dir.name.rsplit("_", 1)[-1]
     if scenario == "class":
         forget_idx, _ = make_class_forget_split(y, 9)

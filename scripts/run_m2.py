@@ -29,7 +29,7 @@ def main():
     out = ROOT / "results" / f"m2_{scenario}"
     out.mkdir(parents=True, exist_ok=True)
 
-    X, y, X_test, y_test = load_mnist(str(ROOT / "data"))
+    X, y, X_test, y_test = load_mnist()
     if scenario == "class":
         forget_idx, retain_idx = make_class_forget_split(y, cls=9)
     elif scenario in ("targeted", "matched"):

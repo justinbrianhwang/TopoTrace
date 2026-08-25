@@ -15,7 +15,7 @@ from topotrace.cifar import load_cifar10
 from topotrace.resnet import get_embeddings, train_resnet
 from topotrace.targeted import make_matched_split, make_targeted_split
 
-X, y, _, _ = load_cifar10(str(ROOT / "data"))
+X, y, _, _ = load_cifar10()
 tf, tr = make_targeted_split(X, y, n_forget=2500, train_fn=train_resnet,
                              embed_fn=get_embeddings)
 mf, mr = make_matched_split(y, tf)
