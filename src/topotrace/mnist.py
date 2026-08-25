@@ -23,6 +23,25 @@ def load_mnist(
     return X_train, y_train, X_test, y_test
 
 
+def load_fashion_mnist(
+    root: str = "data",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load normalized torchvision FashionMNIST arrays."""
+    from torchvision.datasets import FashionMNIST
+
+    train, test = FashionMNIST(root, train=True, download=True), FashionMNIST(
+        root, train=False, download=True
+    )
+
+    def arrays(dataset):
+        X = dataset.data.numpy().astype(np.float32)[:, None] / 255.0
+        return (X - .2860) / .3530, dataset.targets.numpy().astype(np.int64)
+
+    X_train, y_train = arrays(train)
+    X_test, y_test = arrays(test)
+    return X_train, y_train, X_test, y_test
+
+
 def make_random_forget_split(
     y: np.ndarray, frac: float = 0.05, seed: int = 0
 ) -> tuple[np.ndarray, np.ndarray]:

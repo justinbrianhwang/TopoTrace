@@ -22,9 +22,9 @@ def _default_device():
 class ResNet18C(nn.Module):
     """ResNet-18 with a CIFAR stem and 512-wide embeddings."""
 
-    def __init__(self):
+    def __init__(self, num_classes: int = 10):
         super().__init__()
-        self.net = resnet18(num_classes=10)
+        self.net = resnet18(num_classes=num_classes)
         self.net.conv1 = nn.Conv2d(3, 64, 3, stride=1, padding=1, bias=False)
         self.net.maxpool = nn.Identity()
 
@@ -79,11 +79,12 @@ def train_resnet(
     batch_size: int = 128,
     init_model=None,
     device=None,
+    num_classes: int = 10,
 ) -> ResNet18C:
     """Train ResNet-18 with SGD, CIFAR augmentation, cosine decay, and AMP."""
     if init_model is None:
         torch.manual_seed(seed)
-        model = ResNet18C()
+        model = ResNet18C(num_classes=num_classes)
     else:
         model = deepcopy(init_model)
     device = torch.device(device or _default_device())
