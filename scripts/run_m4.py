@@ -65,6 +65,14 @@ def main():
             "test": float(np.mean([evaluate(m, X_test, y_test) for m in ms])),
         }
 
+    import torch
+    (out / "models").mkdir(exist_ok=True)
+    for name, ms in models.items():
+        if name == "noop":
+            continue
+        for i, m in enumerate(ms):
+            torch.save(m.state_dict(), out / "models" / f"{name}_{i}.pt")
+
     print("computing persistence ...", flush=True)
     probe = X[probe_idx]
     dgms = {name: [] for name in models}
