@@ -34,6 +34,19 @@ logistic regression on topology fingerprints separates SCRUB models from
 exact retrains with **ROC-AUC ≈ 1.0**. Pointwise representation metrics
 (cosine similarity) miss the same residuals entirely.
 
+## Persistent homology in one picture
+
+<p align="center">
+  <img src="assets/figs/tda_explainer.png" alt="Persistent homology: grow a radius around each point, track when loops appear and disappear, keep the long-lived features" width="100%">
+</p>
+
+TopoTrace relies on **persistent homology**: grow a radius around every
+embedded probe point, track when connected components (H0) and loops (H1)
+appear and disappear as the radius increases, and keep only the long-lived
+features — the ones that reflect real structure rather than sampling noise.
+Each model's representation of the probe set becomes a *topological
+fingerprint* that can be compared statistically across models.
+
 ## Key ideas
 
 | Component | What it does |
