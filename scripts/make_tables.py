@@ -196,12 +196,50 @@ def matrix():
                      for i, half in enumerate(halves, 1))
 
 
+VERDICT_NAMES = {"retrain": "Exact retrain (oracle)", "retrain2": "Exact retrain (held out)",
+                 "original": "No-op", "finetune": "Fine-tune", "neggrad": "NegGrad",
+                 "scrub": "SCRUB", "ssd": "SSD", "neggrad_plus": "NegGrad+",
+                 "scrub_tuned": "SCRUB (tuned)", "ssd_tuned": "SSD (tuned)"}
+
+
+def verdict():
+    data = load("m4_random/joint_verdict.json")
+    ranges, conditions = data["oracle_ranges"], data["conditions"]
+    rows = []
+    for key, label in VERDICT_NAMES.items():
+        row = conditions[key]
+        mean, q = row["mean"], row["topology_q"]
+        rows.append(" & ".join((
+            label, num(mean["retain"]), num(mean["forget"]), num(mean["test"]),
+            pval(q) if q is not None else "--",
+            esc(row["mode"] or "---"))) + r" \\")
+    rows.append(r"\addlinespace")
+    rows.append(r"\multicolumn{6}{l}{\emph{Destructive noise control}} \\")
+    for key, row in conditions.items():
+        if not key.startswith("noise_"):
+            continue
+        mean = row["mean"]
+        rows.append(" & ".join((
+            f"$\\sigma={key.split('_')[1]}$", num(mean["retain"]), num(mean["forget"]),
+            num(mean["test"]), "--", esc(row["mode"] or "---"))) + r" \\")
+    caption = (r"Joint verdict on CIFAR-10 random 5\%. A condition is audit-consistent "
+               r"(mode ``---'') only if retain/test accuracy, forget accuracy, and the "
+               r"topological method test all agree with the oracle. Oracle reference "
+               f"ranges: retain $[{num(ranges['retain'][0])}, {num(ranges['retain'][1])}]$, "
+               f"forget $[{num(ranges['forget'][0])}, {num(ranges['forget'][1])}]$, "
+               f"test $[{num(ranges['test'][0])}, {num(ranges['test'][1])}]$. "
+               r"Only the two exact-retrain cohorts pass.")
+    return table(caption, "verdict", "lrrrrl",
+                 r"Condition & Retain & Forget & Test & Topology $q$ & Failure mode",
+                 rows, r"\scriptsize")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     outputs = (("table1_settings.tex", settings()), ("table2_main.tex", main_results()),
                ("table3_equivalence.tex", equivalence()), ("table4_ablation.tex", ablation()),
                ("table5_operational.tex", operational()),
-               ("table6_matrix.tex", matrix()))
+               ("table6_matrix.tex", matrix()), ("table7_verdict.tex", verdict()))
     for name, content in outputs:
         path = OUT / name
         path.write_text(content)
