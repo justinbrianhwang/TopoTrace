@@ -9,6 +9,12 @@ OUT = ROOT / "paper" / "tables"
 METHODS = ("noop", "retrain2", "finetune", "neggrad", "scrub", "ssd")
 NAMES = {"noop": "No-op", "retrain2": "Retrain-2", "finetune": "Fine-tune",
          "neggrad": "NegGrad", "scrub": "SCRUB", "ssd": "SSD"}
+SCENARIOS = ("m4_random1", "m4_random", "m4_random10", "m4_class",
+             "m4_targeted", "m4_matched", "m4_random_pretrained",
+             "exp_cifar100_class", "exp_fashionmnist_random",
+             "exp_fashionmnist_class", "exp_svhn_random", "exp_svhn_class",
+             "m2_class")
+APPROXIMATE = ("finetune", "neggrad", "scrub", "ssd")
 
 
 def load(path):
@@ -25,6 +31,16 @@ def pval(x):
 
 def esc(text):
     return str(text).replace("_", r"\_")
+
+
+def bh(pvalues):
+    order = sorted(range(len(pvalues)), key=pvalues.__getitem__)
+    qvalues, running = [0.] * len(pvalues), 1.
+    for rank in range(len(pvalues), 0, -1):
+        index = order[rank - 1]
+        running = min(running, pvalues[index] * len(pvalues) / rank)
+        qvalues[index] = running
+    return qvalues
 
 
 def table(caption, label, columns, header, rows, size=r"\small"):
@@ -81,7 +97,7 @@ def main_results():
         auc = fmean(mia["original" if method == "noop" else method])
         rows.append(" & ".join([NAMES[method], *(num(a[k]) for k in ("retain", "forget", "test")),
                                 num(auc), *(num(m[k]) for k in ("TRR", "alpha", "eta"))]) + r" \\")
-    return table(r"CIFAR-10 random 5\% deletion results (means over seeds).", "main", "lrrrrrrr",
+    return table(r"CIFAR-10 random 5\% deletion results (means over seeds). TRR, $\alpha$, and $\eta$ come from the frozen-grid penultimate-$H_1$ cell.", "main", "lrrrrrrr",
                  r"Method & Retain acc. & Forget acc. & Test acc. & MIA AUC & TRR & $\alpha$ & $\eta$", rows)
 
 
@@ -101,7 +117,7 @@ def equivalence():
                                     ci, num(eq[key]["delta"]), q, esc(value["decision"]))) + r" \\")
         if method != METHODS[-1]:
             rows.append(r"\addlinespace")
-    return table("Formal equivalence tests; stars mark BH-significant entries.", "equivalence", "llrrrrl",
+    return table("Proximity-based oracle-equivalence decisions. Stars mark BH-significant DIFFERENCE tests (method vs oracle).", "equivalence", "llrrrrl",
                  r"Method & Cell & $D_{UR}$ & CI & $\delta$ & BH $q$ & Decision", rows, r"\scriptsize")
 
 
@@ -121,7 +137,7 @@ def ablation():
     for bound in ("min", "max"):
         rows.append(" & ".join((bound.capitalize(), "--", "--", num(oracle["retrain2"][bound]),
                                 num(oracle["scrub"][bound]))) + r" \\")
-    return table("Ablations and single-oracle sensitivity.", "ablation", "lrrrr",
+    return table(r"Ablations and single-oracle sensitivity; all variants are penultimate-$H_1$.", "ablation", "lrrrr",
                  r"Variant & $I_{\mathrm{topo}}$ & $p$ & TRR (Retrain-2) & TRR (SCRUB)", rows)
 
 
@@ -147,16 +163,44 @@ def operational():
                  "lrrrr", header, rows, r"\scriptsize")
 
 
+def matrix():
+    rows = []
+    for scenario in SCENARIOS:
+        analysis = load(f"{scenario}/analysis.json")
+        labels = [(cell, method) for cell, values in analysis.items()
+                  for method in values.get("methods", {})]
+        qvalues = bh([analysis[cell]["methods"][method]["p"]
+                      for cell, method in labels])
+        adjusted = dict(zip(labels, qvalues))
+        for cell, values in analysis.items():
+            gate_open = values["gate_open"]
+            anchor = pval(adjusted[(cell, "retrain2")]) if gate_open else ""
+            worst = pval(max(adjusted[(cell, method)] for method in APPROXIMATE)) \
+                if gate_open else ""
+            rows.append(" & ".join((esc(scenario), esc(cell), num(values["I_topo"]),
+                                    pval(values["p"]), "y" if gate_open else "n",
+                                    anchor, worst)) + r" \\")
+    header = (r"Scenario & Cell & $I_{\mathrm{topo}}$ & Gate $p$ & Gate open & "
+              r"Anchor BH $q$ & Worst approximate BH $q$")
+    halves = (rows[:28], rows[28:])
+    return "\n".join(table(f"Complete scenario-by-cell evidence matrix (part {i}/2).",
+                           f"matrix{i}", "llrrlrr", header, half, r"\scriptsize")
+                     for i, half in enumerate(halves, 1))
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     outputs = (("table1_settings.tex", settings()), ("table2_main.tex", main_results()),
                ("table3_equivalence.tex", equivalence()), ("table4_ablation.tex", ablation()),
-               ("table5_operational.tex", operational()))
+               ("table5_operational.tex", operational()),
+               ("table6_matrix.tex", matrix()))
     for name, content in outputs:
         path = OUT / name
         path.write_text(content)
         assert path.exists() and r"\bottomrule" in path.read_text()
-        print(f"\n--- {name} ---\n" + "\n".join(content.splitlines()[:9]))
+        lines = content.splitlines()
+        print(f"\n--- {name} ---\n" + "\n".join(
+            lines if name == "table6_matrix.tex" else lines[:9]))
 
 
 if __name__ == "__main__":

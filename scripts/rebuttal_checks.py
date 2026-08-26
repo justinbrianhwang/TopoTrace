@@ -42,10 +42,13 @@ def ruler(embeddings, seeds):
             (np.linalg.norm(x, axis=1) * np.linalg.norm(oracle[t], axis=1) + 1e-12)))
             for t in seeds] for s in seeds
             for x in [embeddings[f"{method}_{s}_penultimate"]]]
-    anchor = np.ravel(fingerprints["retrain2"])
+    seed_values = {method: np.mean(values, axis=1)
+                   for method, values in fingerprints.items()}
+    anchor = seed_values["retrain2"]
     return {method: {
-        "median_pairwise_mean_cosine": float(np.median(values)),
-        "permutation_p": mean_difference_pvalue(np.ravel(values), anchor),
+        "median_pairwise_mean_cosine": float(np.median(seed_values[method])),
+        "permutation_p": mean_difference_pvalue(seed_values[method], anchor),
+        "seed_values": seed_values[method].tolist(),
         "fingerprints": values,
     } for method, values in fingerprints.items()}
 
@@ -88,30 +91,32 @@ def distinguisher(features, seeds):
 def oracle_split(diagrams, seeds):
     half_a, half_b = seeds[:5], seeds[5:]
     results = {}
-    for dim in (0, 1):
-        imager = make_imager([diagrams[(condition, seed, "penultimate")][dim]
-                              for condition, subset in (("original", seeds),
-                                                        ("retrain", half_a))
-                              for seed in subset])
-        vectors = lambda condition, subset: [vectorize(
-            diagrams[(condition, seed, "penultimate")], imager, dim) for seed in subset]
-        original = vectors("original", seeds)
-        retrain_a, retrain_b = vectors("retrain", half_a), vectors("retrain", half_b)
-        gate = trr_metrics(original, retrain_a, retrain_a)
-        methods = {}
-        for method in TEST_METHODS:
-            values = vectors(method, seeds)
-            metrics = trr_metrics(original, retrain_b, values)
-            methods[method] = {"TRR": metrics["TRR"],
-                               "permutation_p": permutation_pvalue(values, retrain_b)}
-        results[f"pen_H{dim}"] = {
-            "gate_I_topo": gate["I_topo"],
-            "gate_permutation_p": permutation_pvalue(original, retrain_a),
-            "methods": methods,
-            "pattern_survives": (all(methods[m]["permutation_p"] < .05
-                                     for m in TEST_METHODS[:-1]) and
-                                 methods["retrain2"]["permutation_p"] >= .05),
-        }
+    for layer, short in (("penultimate", "pen"), ("logits", "logits")):
+        for dim in (0, 1):
+            imager = make_imager([diagrams[(condition, seed, layer)][dim]
+                                  for condition, subset in (("original", seeds),
+                                                            ("retrain", half_a))
+                                  for seed in subset])
+            vectors = lambda condition, subset: [vectorize(
+                diagrams[(condition, seed, layer)], imager, dim) for seed in subset]
+            original = vectors("original", seeds)
+            retrain_a = vectors("retrain", half_a)
+            retrain_b = vectors("retrain", half_b)
+            gate = trr_metrics(original, retrain_a, retrain_a)
+            methods = {}
+            for method in TEST_METHODS:
+                values = vectors(method, seeds)
+                metrics = trr_metrics(original, retrain_b, values)
+                methods[method] = {"TRR": metrics["TRR"],
+                                   "permutation_p": permutation_pvalue(values, retrain_b)}
+            results[f"{short}_H{dim}"] = {
+                "gate_I_topo": gate["I_topo"],
+                "gate_permutation_p": permutation_pvalue(original, retrain_a),
+                "methods": methods,
+                "pattern_survives": (all(methods[m]["permutation_p"] < .05
+                                         for m in TEST_METHODS[:-1]) and
+                                     methods["retrain2"]["permutation_p"] >= .05),
+            }
     return results
 
 
@@ -131,7 +136,8 @@ def main():
     features = {}
     for name, layer, dim in cells:
         imager = make_imager([diagrams[(condition, seed, layer)][dim]
-                              for condition in CONDITIONS for seed in seeds])
+                              for condition in ("original", "retrain")
+                              for seed in seeds])
         features[name] = {(condition, seed): vectorize(
             diagrams[(condition, seed, layer)], imager, dim)
             for condition in CONDITIONS for seed in seeds}

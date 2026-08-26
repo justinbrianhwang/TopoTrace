@@ -52,13 +52,14 @@ def main() -> None:
                 cell = {
                     "D_RR": imprint["D_RR"], "D_OR": imprint["D_OR"],
                     "I_topo": imprint["I_topo"], "CI": ci, "p": p,
+                    "gate_open": p < 0.05 and ci[0] > 0,
                 }
                 results[key] = cell
                 print(f"{layer:11s} H{hom_dim} D_RR={cell['D_RR']:.6f} "
                       f"D_OR={cell['D_OR']:.6f} I_topo={cell['I_topo']:+.6f} "
                       f"CI=({ci[0]:+.6f}, {ci[1]:+.6f}) p={p:.6f}")
 
-                if p < 0.05:
+                if cell["gate_open"]:
                     cell["methods"] = {}
                     print(f"  {'method':9s} {'TRR':>9s} {'alpha':>9s} "
                           f"{'eta':>9s} {'p':>9s}")

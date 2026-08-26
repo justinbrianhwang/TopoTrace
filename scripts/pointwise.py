@@ -47,24 +47,26 @@ def main():
         seeds = sorted(int(k.split("_")[1]) for k in archive.files
                        if k.startswith("retrain_") and k.endswith("_penultimate"))
         retrains = [prepare(archive[f"retrain_{s}_penultimate"]) for s in seeds]
-        baseline_values = [compare(a, b) for i, a in enumerate(retrains)
-                           for j, b in enumerate(retrains) if i != j]
+        baseline_values = [np.mean([compare(a, b) for j, b in enumerate(retrains)
+                                    if i != j], axis=0)
+                           for i, a in enumerate(retrains)]
         method_values = {}
         for method in METHODS:
             models = [prepare(archive[f"{method}_{s}_penultimate"]) for s in seeds]
-            method_values[method] = [compare(model, r) for model in models for r in retrains]
+            method_values[method] = [np.mean([compare(model, r) for r in retrains],
+                                             axis=0) for model in models]
 
     names = ("cka", "cosine", "knn_overlap")
     baseline = np.asarray(baseline_values)
     results = {
-        "baseline": {"n_pairs": len(baseline), **{
+        "baseline": {"n_seeds": len(baseline), **{
             name: {"median": float(np.median(baseline[:, i]))}
             for i, name in enumerate(names)}},
         "methods": {},
     }
     for method, values in method_values.items():
         values = np.asarray(values)
-        results["methods"][method] = {"n_pairs": len(values), **{
+        results["methods"][method] = {"n_seeds": len(values), **{
             name: {
                 "median": float(np.median(values[:, i])),
                 "p": permutation_pvalue(values[:, i], baseline[:, i]),

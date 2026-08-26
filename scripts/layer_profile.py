@@ -14,12 +14,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from topotrace.cifar import load_cifar10
 from topotrace.metrics import trr_metrics
 from topotrace.resnet import ResNet18C, get_all_embeddings
-from topotrace.stats import permutation_pvalue
+from topotrace.stats import bootstrap_ci, permutation_pvalue
 from topotrace.topology import (chordal_distance_matrix, make_imager,
                                 persistence_diagrams, vectorize)
 
-LAYERS = ("stem", "layer1", "layer2", "layer3", "layer4",
-          "penultimate", "logits")
+LAYERS = ("stem", "layer1", "layer2", "layer3", "layer4", "logits")
 CONDITIONS = ("original", "retrain", "retrain2", "noop", "finetune",
               "neggrad", "scrub", "ssd")
 METHODS = ("noop", "retrain2", "finetune", "neggrad", "scrub", "ssd")
@@ -27,31 +26,43 @@ METHODS = ("noop", "retrain2", "finetune", "neggrad", "scrub", "ssd")
 
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "results" / "m4_random"
-    X, *_ = load_cifar10()
-    probe = X[np.load(out / "probe_idx.npy")]
-    checkpoints = sorted((out / "models").glob("*.pt"),
-                         key=lambda p: (p.stem.rsplit("_", 1)[0],
-                                        int(p.stem.rsplit("_", 1)[1])))
-    embeddings = {}
     diagrams = {layer: {condition: [] for condition in CONDITIONS}
                 for layer in LAYERS}
 
-    print("extracting embeddings ...", flush=True)
-    for path in checkpoints:
-        condition, seed = path.stem.rsplit("_", 1)
-        model = ResNet18C()
-        model.load_state_dict(torch.load(path, map_location="cpu", weights_only=True))
-        values = get_all_embeddings(model, probe)
-        for layer in LAYERS:
-            embeddings[f"{condition}_{seed}_{layer}"] = values[layer]
-            diagrams[layer][condition].append(persistence_diagrams(
-                chordal_distance_matrix(values[layer])))
-        if condition == "original":
+    cache = out / "embeddings_layers.npz"
+    if cache.exists():
+        print("loading cached embeddings ...", flush=True)
+        with np.load(cache) as embeddings:
+            seeds = sorted(int(key.split("_")[1]) for key in embeddings.files
+                           if key.startswith("original_") and key.endswith("_stem"))
             for layer in LAYERS:
-                embeddings[f"noop_{seed}_{layer}"] = values[layer]
-                diagrams[layer]["noop"].append(diagrams[layer][condition][-1])
-        print(path.stem, flush=True)
-    np.savez_compressed(out / "embeddings_layers.npz", **embeddings)
+                for condition in CONDITIONS:
+                    diagrams[layer][condition] = [persistence_diagrams(
+                        chordal_distance_matrix(embeddings[f"{condition}_{seed}_{layer}"]))
+                        for seed in seeds]
+    else:
+        X, *_ = load_cifar10()
+        probe = X[np.load(out / "probe_idx.npy")]
+        checkpoints = sorted((out / "models").glob("*.pt"),
+                             key=lambda p: (p.stem.rsplit("_", 1)[0],
+                                            int(p.stem.rsplit("_", 1)[1])))
+        embeddings = {}
+        print("extracting embeddings ...", flush=True)
+        for path in checkpoints:
+            condition, seed = path.stem.rsplit("_", 1)
+            model = ResNet18C()
+            model.load_state_dict(torch.load(path, map_location="cpu", weights_only=True))
+            values = get_all_embeddings(model, probe)
+            for layer in LAYERS:
+                embeddings[f"{condition}_{seed}_{layer}"] = values[layer]
+                diagrams[layer][condition].append(persistence_diagrams(
+                    chordal_distance_matrix(values[layer])))
+            if condition == "original":
+                for layer in LAYERS:
+                    embeddings[f"noop_{seed}_{layer}"] = values[layer]
+                    diagrams[layer]["noop"].append(diagrams[layer][condition][-1])
+            print(path.stem, flush=True)
+        np.savez_compressed(cache, **embeddings)
 
     results = {f"H{hom}": {} for hom in (0, 1)}
     for hom in (0, 1):
@@ -63,27 +74,32 @@ def main():
             metrics = {method: trr_metrics(vectors["original"], vectors["retrain"],
                                            vectors[method])
                        for method in METHODS}
+            ci = bootstrap_ci(
+                vectors["original"], vectors["retrain"],
+                lambda A, B: trr_metrics(A, B, B)["I_topo"])
+            p = permutation_pvalue(vectors["original"], vectors["retrain"])
             results[f"H{hom}"][layer] = {
                 "I_topo": metrics["noop"]["I_topo"],
-                "p": permutation_pvalue(vectors["original"], vectors["retrain"]),
+                "CI": ci, "p": p, "gate_open": p < .05 and ci[0] > 0,
                 "methods": metrics,
             }
     (out / "layer_profile.json").write_text(json.dumps(results, indent=2))
 
     for hom in (0, 1):
         print(f"\nH{hom}  " + " ".join(f"{m:>9}" for m in METHODS) +
-              "     I_topo         p")
+              "     I_topo         p  gate")
         for layer in LAYERS:
             row = results[f"H{hom}"][layer]
             print(f"{layer:11}" + " ".join(
                 f"{row['methods'][m]['TRR']:+9.3f}" for m in METHODS) +
-                f"  {row['I_topo']:+10.6f} {row['p']:9.6f}")
+                f"  {row['I_topo']:+10.6f} {row['p']:9.6f}  "
+                f"{'open' if row['gate_open'] else 'closed'}")
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
     x = np.arange(len(LAYERS))
     for hom, ax in enumerate(axes):
         rows = results[f"H{hom}"]
-        hollow = np.array([rows[layer]["p"] >= .05 for layer in LAYERS])
+        hollow = np.array([not rows[layer]["gate_open"] for layer in LAYERS])
         for method in METHODS:
             y = np.clip([rows[layer]["methods"][method]["TRR"]
                          for layer in LAYERS], -1, 5)
@@ -92,7 +108,8 @@ def main():
             ax.scatter(x[hollow], y[hollow], facecolors="none",
                        edgecolors=line.get_color(), s=24)
         ax.set(title=f"H{hom}", xlabel="Layer", xticks=x,
-               xticklabels=LAYERS, ylim=(-1, 5))
+               xticklabels=(*LAYERS[:-2], "layer4 (=penultimate)", "logits"),
+               ylim=(-1, 5))
         ax.tick_params(axis="x", rotation=35)
     axes[0].set_ylabel("TRR")
     axes[1].legend(fontsize=8)

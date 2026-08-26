@@ -29,15 +29,32 @@ def evaluate(features, negatives, positives, seeds):
     labels = np.array([0] * len(negatives) + [1] * len(positives))
     groups = np.array([seed for _, seed in models])
     X = np.array([features[model] for model in models])
-    scores = np.empty(len(models))
-    for seed in seeds:
-        test = groups == seed
-        classifier = make_pipeline(
-            StandardScaler(), LogisticRegression(max_iter=1000))
-        classifier.fit(X[~test], labels[~test])
-        scores[test] = classifier.decision_function(X[test])
-    return {"auc": roc_auc_score(labels, scores),
-            "balanced_accuracy": balanced_accuracy_score(labels, scores >= 0)}
+
+    def predict(y):
+        scores = np.empty(len(models))
+        for seed in seeds:
+            test = groups == seed
+            classifier = make_pipeline(
+                StandardScaler(), LogisticRegression(max_iter=1000))
+            classifier.fit(X[~test], y[~test])
+            scores[test] = classifier.decision_function(X[test])
+        return scores
+
+    scores = predict(labels)
+    rng = np.random.default_rng(0)
+    null = []
+    for _ in range(200):
+        y = labels.copy()
+        for seed in seeds:
+            y[groups == seed] = rng.permutation(y[groups == seed])
+        null.append(roc_auc_score(y, predict(y)))
+    observed = roc_auc_score(labels, scores)
+    p95 = float(np.percentile(null, 95))
+    return {"auc": observed,
+            "balanced_accuracy": balanced_accuracy_score(labels, scores >= 0),
+            "null_auc_mean": float(np.mean(null)),
+            "null_auc_95th_percentile": p95,
+            "observed_exceeds_null_95th": bool(observed > p95)}
 
 
 def main() -> None:
@@ -50,7 +67,9 @@ def main() -> None:
             diagrams = {(condition, seed): persistence_diagrams(
                 chordal_distance_matrix(embeddings[f"{condition}_{seed}_{layer}"]))
                 for condition in CONDITIONS for seed in seeds}
-            imager = make_imager([diagram[dim] for diagram in diagrams.values()])
+            imager = make_imager([diagrams[(condition, seed)][dim]
+                                  for condition in ("original", "retrain")
+                                  for seed in seeds])
             features[name] = {model: vectorize(diagram, imager, dim)
                               for model, diagram in diagrams.items()}
 
@@ -59,18 +78,24 @@ def main() -> None:
         for model in features["pen_H1"]}
     negatives = [(condition, seed) for condition in ("retrain", "retrain2")
                  for seed in seeds]
-    tasks = {method: [(method, seed) for seed in seeds] for method in METHODS}
-    tasks["any_approximate"] = [(method, seed)
-                                for method in METHODS[:-1] for seed in seeds]
+    tasks = {method: (negatives, [(method, seed) for seed in seeds])
+             for method in METHODS}
+    tasks["any_approximate"] = (negatives, [(method, seed)
+                                             for method in METHODS[:-1]
+                                             for seed in seeds])
+    tasks["anchor_control"] = ([("retrain", seed) for seed in seeds],
+                               [("retrain2", seed) for seed in seeds])
     results = {task: {name: evaluate(feature, negatives, positives, seeds)
                       for name, feature in features.items()}
-               for task, positives in tasks.items()}
+               for task, (negatives, positives) in tasks.items()}
 
     names = list(features)
-    print(f"{'task':16s}" + "".join(f"{name:>20s}" for name in names))
+    print(f"{'task':16s}" + "".join(f"{name:>28s}" for name in names))
     for task, row in results.items():
         print(f"{task:16s}" + "".join(
-            f"{cell['auc']:.3f} ({cell['balanced_accuracy']:.3f})".rjust(20)
+            (f"{cell['auc']:.3f} ({cell['balanced_accuracy']:.3f}) "
+             f"{cell['null_auc_mean']:.3f}/{cell['null_auc_95th_percentile']:.3f}"
+             f"{'*' if cell['observed_exceeds_null_95th'] else ''}").rjust(28)
             for cell in row.values()))
     (out / "distinguisher.json").write_text(json.dumps(results, indent=2))
 

@@ -69,9 +69,8 @@ def main():
             for name in CONDITIONS
         }
 
-    imager = make_imager([diagram[1] for values in
-                          (*diagrams.values(), *noise_diagrams.values())
-                          for diagram in values])
+    imager = make_imager([diagram[1] for name in ("original", "retrain")
+                          for diagram in diagrams[name]])
     vectors = {name: [vectorize(diagram, imager) for diagram in values]
                for name, values in diagrams.items()}
     results = {}
