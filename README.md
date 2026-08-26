@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://doi.org/10.5281/zenodo.22106506"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.22106506-blue.svg" alt="DOI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.12-blue.svg" alt="Python 3.12">
   <img src="https://img.shields.io/badge/PyTorch-2.13-ee4c2c.svg" alt="PyTorch 2.13">
@@ -136,6 +137,20 @@ TopoTrace is an **empirical falsification and auditing framework**: a
 topological match to the oracle distribution is evidence consistent with
 successful unlearning under the chosen probe, layer, and statistic — it is
 not a certificate, and it does not replace certified unlearning.
+
+## Citation
+
+Archived code and artifacts: [10.5281/zenodo.22106506](https://doi.org/10.5281/zenodo.22106506)
+
+```bibtex
+@software{hwang2026topotrace,
+  author  = {Hwang, Sunjun},
+  title   = {TopoTrace: Oracle-Calibrated Topological Auditing of Machine Unlearning --- Code and Artifacts},
+  year    = {2026},
+  doi     = {10.5281/zenodo.22106506},
+  url     = {https://github.com/justinbrianhwang/TopoTrace}
+}
+```
 
 ## License
 
