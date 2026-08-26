@@ -168,6 +168,86 @@ def scrub(model, X, y, forget_idx, retain_idx, seed: int,
     return _finish(student)
 
 
+def salun(model, X, y, forget_idx, retain_idx, seed: int, sparsity: float = 0.5,
+          epochs: int = 2, lr: float = 1e-4, batch_size: int = 128):
+    """Run saliency-masked random-label unlearning (SalUn)."""
+    device = _device()
+    student = deepcopy(model).to(device).eval()
+    original = [parameter.detach().clone() for parameter in student.parameters()]
+    saliency = [torch.zeros_like(parameter) for parameter in student.parameters()]
+    for batch in list(_batches(forget_idx, batch_size))[:20]:
+        xb, yb = _xy(X, y, batch, device)
+        student.zero_grad()
+        F.cross_entropy(student(xb), yb).backward()
+        for total, parameter in zip(saliency, student.parameters()):
+            if parameter.grad is not None:
+                total.add_(parameter.grad.abs())
+    masks = []
+    for values in saliency:
+        mask = torch.zeros_like(values, dtype=torch.bool).flatten()
+        mask[torch.topk(values.flatten(), max(
+            1, int(values.numel() * sparsity))).indices] = True
+        masks.append(mask.view_as(values))
+
+    optimizer = torch.optim.Adam(student.parameters(), lr=lr)
+    shuffle_generator = torch.Generator().manual_seed(seed)
+    label_generator = torch.Generator(device=device).manual_seed(seed)
+    for _ in range(epochs):
+        forget_batches = list(_batches(forget_idx, batch_size, shuffle=True,
+                                       generator=shuffle_generator))
+        for step, retain_batch in enumerate(_batches(
+                retain_idx, batch_size, shuffle=True, generator=shuffle_generator)):
+            forget_batch = forget_batches[step % len(forget_batches)]
+            for batch, random_labels in ((forget_batch, True),
+                                         (retain_batch, False)):
+                xb, yb = _xy(X, y, batch, device)
+                optimizer.zero_grad()
+                logits = student(xb)
+                if random_labels:
+                    offset = torch.randint(1, logits.shape[1], yb.shape,
+                                           device=device,
+                                           generator=label_generator)
+                    yb = (yb + offset) % logits.shape[1]
+                F.cross_entropy(logits, yb).backward()
+                optimizer.step()
+                with torch.no_grad():
+                    for parameter, value, mask in zip(
+                            student.parameters(), original, masks):
+                        parameter[~mask] = value[~mask]
+    return _finish(student)
+
+
+def rmu(model, X, y, forget_idx, retain_idx, seed: int, steps: int = 300,
+        lr: float = 1e-4, coeff: float = 6.0, alpha: float = 1.0,
+        batch_size: int = 128):
+    """Steer forgotten embeddings while preserving retained ones (RMU)."""
+    device = _device()
+    student = deepcopy(model).to(device).eval()
+    reference = deepcopy(model).to(device).eval()
+    for parameter in reference.parameters():
+        parameter.requires_grad_(False)
+    generator = torch.Generator().manual_seed(seed)
+    direction = torch.randn(512, generator=generator, device="cpu").to(device)
+    direction /= direction.norm()
+    optimizer = torch.optim.Adam(student.parameters(), lr=lr)
+    forget_idx, retain_idx = np.asarray(forget_idx), np.asarray(retain_idx)
+    for _ in range(steps):
+        forget_batch = forget_idx[torch.randint(
+            len(forget_idx), (batch_size,), generator=generator).numpy()]
+        retain_batch = retain_idx[torch.randint(
+            len(retain_idx), (batch_size,), generator=generator).numpy()]
+        xf, _ = _xy(X, y, forget_batch, device)
+        xr, _ = _xy(X, y, retain_batch, device)
+        optimizer.zero_grad()
+        forget_loss = (student.embed(xf) - coeff * direction).square().sum(1).mean()
+        with torch.no_grad():
+            retain_target = reference.embed(xr)
+        retain_loss = (student.embed(xr) - retain_target).square().sum(1).mean()
+        (forget_loss + alpha * retain_loss).backward()
+        optimizer.step()
+    return _finish(student)
+
+
 def _importance(model, X, y, idx, batch_size, max_batches, device):
     importance = [torch.zeros_like(p) for p in model.parameters()]
     count = 0
