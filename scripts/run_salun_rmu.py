@@ -57,10 +57,12 @@ def main():
     probe = X[np.load(out / "probe_idx.npy")]
     original = load_model(models_dir / "original_0.pt")
     grids = {
-        "salun": [dict(sparsity=sparsity, epochs=epochs)
-                  for sparsity, epochs in product((.3, .5), (1, 2))],
-        "rmu": [dict(coeff=coeff, steps=steps)
-                for coeff, steps in product((2., 6.), (150, 300))],
+        "salun": [dict(sparsity=sparsity, epochs=epochs, lr=lr)
+                  for sparsity, epochs, lr in product(
+                      (.1, .2, .3, .5), (1, 2), (1e-5, 1e-4))],
+        "rmu": [dict(coeff=coeff, steps=steps, alpha=alpha)
+                for coeff, steps, alpha in product(
+                    (.25, .5, 1., 2.), (50, 100, 300), (1., 5.))],
     }
     calls = {
         "salun": lambda config: salun(

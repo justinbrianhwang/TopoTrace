@@ -199,7 +199,8 @@ def matrix():
 VERDICT_NAMES = {"retrain": "Exact retrain (oracle)", "retrain2": "Exact retrain (held out)",
                  "original": "No-op", "finetune": "Fine-tune", "neggrad": "NegGrad",
                  "scrub": "SCRUB", "ssd": "SSD", "neggrad_plus": "NegGrad+",
-                 "scrub_tuned": "SCRUB (tuned)", "ssd_tuned": "SSD (tuned)"}
+                 "scrub_tuned": "SCRUB (tuned)", "ssd_tuned": "SSD (tuned)",
+                 "salun": "SalUn (tuned)", "rmu": "RMU (tuned)"}
 
 
 def verdict():
