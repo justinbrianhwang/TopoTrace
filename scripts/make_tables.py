@@ -112,13 +112,15 @@ def equivalence():
         for i, (key, cell) in enumerate(cells):
             value, test = eq[key]["methods"][method], bh[key][method]
             q = pval(test["q"]) + (r"$^*$" if test["reject"] else "")
-            ci = f"[{num(value['CI'][0])}, {num(value['CI'][1])}]"
+            dci = value.get("dur_minus_delta_CI", value["CI"])
+            ci = f"[{num(dci[0])}, {num(dci[1])}]"
+            decision = value.get("joint_decision", value["decision"])
             rows.append(" & ".join((NAMES[method] if i == 0 else "", cell, num(value["D_UR"]),
-                                    ci, num(eq[key]["delta"]), q, esc(value["decision"]))) + r" \\")
+                                    num(eq[key]["delta"]), ci, q, esc(decision))) + r" \\")
         if method != METHODS[-1]:
             rows.append(r"\addlinespace")
-    return table("Proximity-based oracle-equivalence decisions. Stars mark BH-significant DIFFERENCE tests (method vs oracle).", "equivalence", "llrrrrl",
-                 r"Method & Cell & $D_{UR}$ & CI & $\delta$ & BH $q$ & Decision", rows, r"\scriptsize")
+    return table(r"Proximity-based oracle-equivalence decisions with jointly bootstrapped margin (CI is for $D_{UR}-\delta$; oracle and method seeds resampled together). Stars mark BH-significant DIFFERENCE tests (method vs oracle).", "equivalence", "llrrrrl",
+                 r"Method & Cell & $D_{UR}$ & $\delta$ & CI($D_{UR}-\delta$) & BH $q$ & Decision", rows, r"\scriptsize")
 
 
 def ablation():

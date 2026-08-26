@@ -25,6 +25,16 @@ def d_ur(U, R):
     return float(np.median([np.linalg.norm(u - r) for u in U for r in R]))
 
 
+def dur_minus_delta(U, R):
+    return d_ur(U, R) - float(np.percentile(
+        [np.linalg.norm(a - b) for a, b in combinations(R, 2)], 95))
+
+
+def proximity_decision(ci):
+    return ("within-radius" if ci[1] < 0 else
+            "outside" if ci[0] > 0 else "inconclusive")
+
+
 def bh(pvalues):
     p = np.asarray(pvalues)
     order = np.argsort(p)
@@ -61,11 +71,27 @@ def main():
             rows = {}
             for method in METHODS:
                 ci = bootstrap_ci(v[method], v["retrain"], d_ur)
+                joint_ci = bootstrap_ci(v[method], v["retrain"],
+                                        dur_minus_delta)
                 decision = ("oracle-equivalent" if ci[1] < delta else
                             "outside" if ci[0] > delta else "inconclusive")
                 rows[method] = {"D_UR": d_ur(v[method], v["retrain"]),
-                                "CI": ci, "decision": decision}
+                                "CI": ci, "decision": decision,
+                                "joint_decision": proximity_decision(joint_ci),
+                                "dur_minus_delta_CI": joint_ci}
             equivalence[key] = {"delta": delta, "methods": rows}
+
+    rng = np.random.default_rng(0)
+    operating = {}
+    for cell, v in vectors.items():
+        counts = {d: 0 for d in ("within-radius", "outside", "inconclusive")}
+        for _ in range(200):
+            split = rng.permutation(len(v["retrain"]))
+            A = [v["retrain"][i] for i in split[:5]]
+            B = [v["retrain"][i] for i in split[5:]]
+            counts[proximity_decision(
+                bootstrap_ci(B, A, dur_minus_delta))] += 1
+        operating[cell] = {d: n / 200 for d, n in counts.items()}
 
     analysis_path = out / "analysis.json"
     analysis = json.loads(analysis_path.read_text()) if analysis_path.exists() else {}
@@ -117,6 +143,7 @@ def main():
              "std": float(np.std(audit_values, ddof=1)), "values": audit_values}
 
     results = {"equivalence": equivalence,
+               "proximity_operating_characteristics": operating,
                "bh_fdr": {"alpha": .05, "cells": fdr},
                "correlations": correlations, "audit_bootstrap": audit}
     print("equivalence")
@@ -124,6 +151,13 @@ def main():
         print(f"{cell} delta={result['delta']:.6g}")
         print("  " + " ".join(f"{m}={r['D_UR']:.4g}[{r['decision']}]"
                               for m, r in result["methods"].items()))
+        print("  joint " + " ".join(
+            f"{m}={r['dur_minus_delta_CI'][0]:.4g},"
+            f"{r['dur_minus_delta_CI'][1]:.4g}[{r['joint_decision']}]"
+            for m, r in result["methods"].items()))
+    print("proximity operating characteristics")
+    for cell, rows in operating.items():
+        print(f"{cell}: " + " ".join(f"{d}={p:.3f}" for d, p in rows.items()))
     print("BH-FDR")
     for cell, rows in fdr.items():
         print(f"{cell}: " + " ".join(
