@@ -35,7 +35,11 @@ def main() -> None:
             }
 
             for hom_dim in (0, 1):
-                imager = make_imager([d[hom_dim] for ds in diagrams.values() for d in ds])
+                # frozen-grid protocol: the persistence-image grid is fitted
+                # on original+oracle diagrams ONLY, before any unlearned
+                # model is vectorized (audit independence)
+                imager = make_imager([d[hom_dim] for c in ("original", "retrain")
+                                      for d in diagrams[c]])
                 vectors = {name: [vectorize(d, imager, dim=hom_dim) for d in ds]
                            for name, ds in diagrams.items()}
                 v_O, v_R = vectors["original"], vectors["retrain"]
