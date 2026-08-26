@@ -72,9 +72,12 @@ def settings():
 
 def main_results():
     metrics, mia = load("m4_random/metrics.json"), load("m4_random/mia.json")
+    # TRR/alpha/eta from the frozen-grid analysis (penultimate H1 cell)
+    frozen = load("m4_random/analysis.json")["penultimate_H1"]["methods"]
     rows = []
     for method in METHODS:
-        m, a = metrics[method], metrics[method]["acc"]
+        a = metrics[method]["acc"]
+        m = frozen.get(method, {"TRR": 1.0, "alpha": 0.0, "eta": 0.0})
         auc = fmean(mia["original" if method == "noop" else method])
         rows.append(" & ".join([NAMES[method], *(num(a[k]) for k in ("retain", "forget", "test")),
                                 num(auc), *(num(m[k]) for k in ("TRR", "alpha", "eta"))]) + r" \\")

@@ -1,4 +1,4 @@
-"""Formal statistical analyses from cached embeddings."""
+﻿"""Formal statistical analyses from cached embeddings."""
 
 import json
 import sys
@@ -52,7 +52,7 @@ def main():
     for layer in ("penultimate", "logits"):
         for hom in (0, 1):
             key = f"{layer}_H{hom}"
-            imager = make_imager([d[hom] for ds in diagrams[layer].values() for d in ds])
+            imager = make_imager([d[hom] for c in ("original", "retrain") for d in diagrams[layer][c]])
             v = {c: [vectorize(d, imager, dim=hom) for d in ds]
                  for c, ds in diagrams[layer].items()}
             vectors[key] = v
@@ -108,7 +108,7 @@ def main():
                            size=len(embeddings["penultimate"]["original"][0]))
         ds = {c: [persistence_diagrams(chordal_distance_matrix(X[rows]))
                   for X in embeddings["penultimate"][c]] for c in CONDITIONS}
-        imager = make_imager([d[1] for models in ds.values() for d in models])
+        imager = make_imager([d[1] for c in ("original", "retrain") for d in ds[c]])
         boot = {c: [vectorize(d, imager) for d in ds[c]]
                 for c in ("original", "retrain")}
         audit_values.append(trr_metrics(boot["original"], boot["retrain"],

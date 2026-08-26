@@ -37,7 +37,9 @@ def distances(X, kind):
 def vectors(diagrams, kind):
     h1 = [d[1] for ds in diagrams.values() for d in ds]
     if kind == "persistence_image":
-        imager = make_imager(h1)
+        # frozen-grid protocol: fit on original + oracle retrains only
+        imager = make_imager([d[1] for c in ("original", "retrain")
+                              for d in diagrams[c]])
         return {c: [vectorize(d, imager) for d in ds]
                 for c, ds in diagrams.items()}
     if kind == "betti_curve":

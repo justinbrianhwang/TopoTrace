@@ -1,4 +1,4 @@
-"""Layerwise topological profile for saved CIFAR-10 ResNet checkpoints."""
+﻿"""Layerwise topological profile for saved CIFAR-10 ResNet checkpoints."""
 
 import json
 import sys
@@ -57,7 +57,7 @@ def main():
     for hom in (0, 1):
         for layer in LAYERS:
             layer_diagrams = diagrams[layer]
-            imager = make_imager([d[hom] for ds in layer_diagrams.values() for d in ds])
+            imager = make_imager([d[hom] for c in ("original", "retrain") for d in layer_diagrams[c]])
             vectors = {condition: [vectorize(d, imager, hom) for d in ds]
                        for condition, ds in layer_diagrams.items()}
             metrics = {method: trr_metrics(vectors["original"], vectors["retrain"],
