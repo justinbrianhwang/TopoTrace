@@ -161,8 +161,14 @@ def operational():
         value = correlations[key]
         rows.append(f"{label} & $\\rho={num(value['rho'])}$ & $p={pval(value['p'])}$ & & \\\\")
     header = "Task / condition & " + " & ".join(label for _, label in features)
-    return table("Operational distinguishability, relearning, and rank correlations.", "operational",
-                 "lrrrr", header, rows, r"\scriptsize")
+    caption = ("Operational distinguishability, relearning, and rank correlations. "
+               "Relearning epoch-AUC has zero variance for conditions whose forget "
+               "accuracy saturates after the first epoch (curves are identically "
+               r"$(0,1,1,\ldots)$). Rank correlations pool methods per seed and "
+               "exclude NegGrad, whose utility collapse (retain accuracy $0.02$) "
+               "places it outside the regime the correlation is meant to probe; "
+               "the no-op is excluded for lacking a relearning outcome.")
+    return table(caption, "operational", "lrrrr", header, rows, r"\scriptsize")
 
 
 def matrix():
