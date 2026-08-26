@@ -100,6 +100,35 @@ def neggrad(model, X, y, forget_idx, retain_idx, seed: int,
     return _finish(student)
 
 
+def neggrad_plus(model, X, y, forget_idx, retain_idx, seed: int,
+                 epochs: int = 2, lr: float = 1e-4, beta: float = 0.95,
+                 batch_size: int = 128) -> SmallCNN:
+    """NegGrad+ (Kurmanji et al. 2023): joint objective over interleaved
+    minibatches, loss = beta * CE(retain batch) - (1-beta) * CE(forget
+    batch), Adam. Each step samples one retain batch and one forget batch
+    (forget batches cycle). Deepcopy the model; eval CPU return as the
+    other methods."""
+    device = _device()
+    student = deepcopy(model).to(device).train()
+    optimizer = torch.optim.Adam(student.parameters(), lr=lr)
+    generator = torch.Generator().manual_seed(seed)
+
+    for _ in range(epochs):
+        forget_batches = list(_batches(forget_idx, batch_size, shuffle=True,
+                                       generator=generator))
+        for step, retain_batch in enumerate(_batches(
+                retain_idx, batch_size, shuffle=True, generator=generator)):
+            forget_batch = forget_batches[step % len(forget_batches)]
+            xr, yr = _xy(X, y, retain_batch, device)
+            xf, yf = _xy(X, y, forget_batch, device)
+            optimizer.zero_grad()
+            loss = beta * F.cross_entropy(student(xr), yr)
+            loss -= (1 - beta) * F.cross_entropy(student(xf), yf)
+            loss.backward()
+            optimizer.step()
+    return _finish(student)
+
+
 def _kl(student_logits, teacher_logits, temperature=2.0):
     student_logp = F.log_softmax(student_logits / temperature, dim=1)
     student_p = student_logp.exp()
